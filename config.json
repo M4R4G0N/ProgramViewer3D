@@ -1,0 +1,67 @@
+{
+    "background_color": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+    ],
+    "point_size": 1.18,
+    "show_axes": false,
+    "show_axis_indicator": true,
+    "camera_distance": 10.0,
+    "camera_pitch": -25.0,
+    "camera_yaw": 358.0,
+    "camera_move_speed": 5.0,
+    "window_width": 1920,
+    "window_height": 1008,
+    "window_title": "3D Point Cloud Viewer",
+    "max_points": 500000,
+    "enable_antialiasing": true,
+    "background_presets": [
+        {
+            "name": "Preto",
+            "color": [
+                0.0,
+                0.0,
+                0.0,
+                1.0
+            ]
+        },
+        {
+            "name": "Cinza Escuro",
+            "color": [
+                0.1,
+                0.1,
+                0.1,
+                1.0
+            ]
+        },
+        {
+            "name": "Cinza M\u00e9dio",
+            "color": [
+                0.3,
+                0.3,
+                0.3,
+                1.0
+            ]
+        },
+        {
+            "name": "Branco",
+            "color": [
+                1.0,
+                1.0,
+                1.0,
+                1.0
+            ]
+        },
+        {
+            "name": "Azul Escuro",
+            "color": [
+                0.0,
+                0.0,
+                0.2,
+                1.0
+            ]
+        }
+    ]
+}
