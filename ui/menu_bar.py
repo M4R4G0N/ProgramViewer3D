@@ -122,11 +122,11 @@ class MenuBar:
         if self.active_menu is not None:
             menu = self.menus[self.active_menu]
             dropdown_x, dropdown_y = self._get_dropdown_position(self.active_menu)
-            dropdown_width = 200
+            dropdown_width = self._get_dropdown_width(self.active_menu)
             item_height = 25
             
             y_offset = 0
-            for item in menu['items']:
+            for idx, item in enumerate(menu['items']):
                 if item.get('separator'):
                     y_offset += 5
                     continue
@@ -165,7 +165,7 @@ class MenuBar:
         if self.active_menu is not None:
             menu = self.menus[self.active_menu]
             dropdown_x, dropdown_y = self._get_dropdown_position(self.active_menu)
-            dropdown_width = 200
+            dropdown_width = self._get_dropdown_width(self.active_menu)
             item_height = 25
             
             y_offset = 0
@@ -198,6 +198,24 @@ class MenuBar:
         # Dropdown começa logo abaixo da barra de menu
         return menu_x, self.height - self.menu_height
     
+    def _get_dropdown_width(self, menu_index):
+        """
+        Calcula largura do dropdown baseada no texto mais longo
+        
+        Returns:
+            Largura em pixels
+        """
+        menu = self.menus[menu_index]
+        max_text_width = 0
+        for item in menu['items']:
+            if not item.get('separator'):
+                text_width = self.font.measure_text(item['label'], font_size=0.85)
+                max_text_width = max(max_text_width, text_width)
+        
+        # Adiciona padding para checkbox e margens
+        dropdown_width = max_text_width + 40  # 10 padding + 20 checkbox + 10 padding
+        return max(dropdown_width, 150)  # Largura mínima
+    
     def render(self):
         """Renderiza barra de menu"""
         # Configura projeção 2D
@@ -213,12 +231,18 @@ class MenuBar:
         # Desabilita depth test para UI
         glDisable(GL_DEPTH_TEST)
         
+        # Aplica escala para corrigir aspect ratio da fonte
+        # Salva estado da modelview para aplicar escala apenas no texto
+        glPushMatrix()
+        
         # Renderiza barra principal
         self._render_main_bar()
         
         # Renderiza dropdown se ativo
         if self.active_menu is not None:
             self._render_dropdown(self.active_menu)
+        
+        glPopMatrix()
         
         # Restaura estado
         glEnable(GL_DEPTH_TEST)
@@ -275,7 +299,7 @@ class MenuBar:
         """Renderiza dropdown do menu (sistema OpenGL - Y crescendo para cima)"""
         menu = self.menus[menu_index]
         dropdown_x, dropdown_y = self._get_dropdown_position(menu_index)
-        dropdown_width = 200
+        dropdown_width = self._get_dropdown_width(menu_index)
         item_height = 25
         
         # Calcula altura total
@@ -351,6 +375,6 @@ class MenuBar:
             text_x = dropdown_x + 10 + checkbox_offset
             text_y = item_y_bottom + item_height // 2 - 6
             self.font.draw_text(text_x, text_y, item['label'],
-                               color=(1.0, 1.0, 1.0), font_size=0.9)
+                               color=(1.0, 1.0, 1.0), font_size=0.85)
             
             y_offset += item_height
