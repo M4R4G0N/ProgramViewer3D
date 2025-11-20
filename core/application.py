@@ -294,10 +294,33 @@ class Viewer3DApplication:
                     self.font_editor.load_from_vector_font()
                 elif key == glfw.KEY_R and not (mods & glfw.MOD_SHIFT):
                     self.font_editor.reverse_selected_arc()
-                # Números sempre trocam caractere
+                # Números e símbolos (com/sem Shift)
                 elif glfw.KEY_0 <= key <= glfw.KEY_9:
-                    char = chr(key)
+                    if mods & glfw.MOD_SHIFT:
+                        # Shift + número = símbolo
+                        shift_symbols = {
+                            glfw.KEY_1: '!',
+                            glfw.KEY_2: '@',
+                            glfw.KEY_3: '#',
+                            glfw.KEY_4: '$',
+                            glfw.KEY_5: '%',
+                            glfw.KEY_6: '^',
+                            glfw.KEY_7: '&',
+                            glfw.KEY_8: '*',
+                            glfw.KEY_9: '(',
+                            glfw.KEY_0: ')'
+                        }
+                        char = shift_symbols.get(key, chr(key))
+                    else:
+                        # Sem Shift = número
+                        char = chr(key)
                     self.font_editor.set_current_char(char)
+                # Outros símbolos especiais
+                elif key == glfw.KEY_GRAVE_ACCENT:  # Tecla ~
+                    if mods & glfw.MOD_SHIFT:
+                        self.font_editor.set_current_char('~')
+                    else:
+                        self.font_editor.set_current_char('`')
                 return  # Não processa outros comandos
             
             # F: Abrir Font Editor
@@ -307,7 +330,7 @@ class Viewer3DApplication:
             
             # C: Menu de configuração
             elif key == glfw.KEY_C:
-                self.show_config_menu = not self.show_config_menu
+                self._process_menu_action('show_config')
             
             # R: Reset câmera
             elif key == glfw.KEY_R:
@@ -427,8 +450,9 @@ class Viewer3DApplication:
                 mx, my = glfw.get_cursor_pos(window)
                 my_inverted = self.height - my  # Inverte Y para sistema OpenGL
                 
-                # Verifica clique na barra de menu (usa coordenadas OpenGL - Y crescendo para cima)
-                if self.menu_bar.is_over_menu(mx, my_inverted):
+                # Verifica clique na barra de menu ou dropdown (usa coordenadas OpenGL - Y crescendo para cima)
+                # Sempre processa clique se menu está ativo (dropdown aberto) OU se está sobre a barra
+                if self.menu_bar.active_menu is not None or self.menu_bar.is_over_menu(mx, my_inverted):
                     menu_action = self.menu_bar.handle_click(mx, my_inverted)
                     if menu_action:
                         self._process_menu_action(menu_action)
@@ -728,18 +752,18 @@ class Viewer3DApplication:
                            "CONFIGURACOES", color=(1, 1, 1), font_size=1.2)
         
         # Labels
-        self.font.draw_text(menu_x + 20, menu_y + menu_height - 145,
+        self.font.draw_text(menu_x + 20, menu_y + menu_height - 105,
                            "Cor de Fundo", color=(0.9, 0.9, 0.9), font_size=0.9)
         
-        self.font.draw_text(menu_x + 20, menu_y + menu_height - 255,
+        self.font.draw_text(menu_x + 200, menu_y + menu_height - 235,
                            "Mostrar Eixos", color=(0.9, 0.9, 0.9), font_size=0.9)
         
-        self.font.draw_text(menu_x + 20, menu_y + menu_height - 365,
+        self.font.draw_text(menu_x + 50, menu_y + menu_height - 345,
                            "Tamanho", color=(0.9, 0.9, 0.9), font_size=0.9)
         
         # Valor do slider
         value_text = f"{self.point_renderer.get_point_size():.1f}px"
-        self.font.draw_text(menu_x + 350, menu_y + menu_height - 365,
+        self.font.draw_text(menu_x + 400, menu_y + menu_height - 345,
                            value_text, color=(1, 1, 0), font_size=0.8)
         
         # Instruções
