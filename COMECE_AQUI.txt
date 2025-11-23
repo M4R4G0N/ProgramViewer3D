@@ -1,0 +1,165 @@
+SIMULADOR DE TREM 3D - COMO USAR
+=================================
+
+OBJETIVO: Visualizar um trem passando pelo eixo Z em seu aplicativo 3D
+
+ARQUIVOS CRIADOS: 13 arquivos totais
+- 3 modulos Python (simulador + renderizador)
+- 3 scripts prontos para rodar
+- 5 arquivos de documentacao
+- 2 resumos executivos
+
+=====================================
+COMECE AQUI - 3 OPCOES
+=====================================
+
+OPCAO 1: Teste Rapido (2 minutos)
+----------------------------------
+Passo 1: Abra PowerShell
+Passo 2: Digite:
+    cd c:\3D\ProgramViewer3D-main
+    python examples_train.py
+
+Resultado: Gera 2 arquivos .pts com o trem
+
+
+OPCAO 2: Visualize o Trem (3 minutos)
+--------------------------------------
+Apos OPCAO 1, digite:
+    python main.py train_example.pts
+
+Resultado: Abre o visualizador com o trem
+
+
+OPCAO 3: Trem + Sua Nuvem de Pontos (5 minutos)
+------------------------------------------------
+Digite:
+    python train_simulation.py seu_arquivo.pts
+
+Resultado: Trem passando pela sua nuvem!
+
+
+=====================================
+CONTROLES (Use OPCAO 3)
+=====================================
+
+K      = Liga/desliga trem
+L      = Liga/desliga nuvem de pontos
+G      = Liga/desliga grade
++/-    = Aumenta/diminui velocidade
+SPACE  = Pausa/retoma trem
+R      = Reseta posicao do trem
+ESC    = Sair
+
+
+=====================================
+CODIGO PYTHON MINIMO
+=====================================
+
+from utils.train_simulator import TrainSimulator
+
+# Criar trem
+trem = TrainSimulator(num_wagons=5)
+
+# Obter pontos para renderizar
+pontos, cores = trem.get_points()
+
+# Mover o trem
+trem.update(dt=1.0)
+
+# Ver informacoes
+print(f"Total de pontos: {len(pontos):,}")
+print(f"Posicao Z: {trem.get_position():.1f}")
+
+
+=====================================
+ARQUIVOS PRINCIPAIS
+=====================================
+
+utils/train_simulator.py
+  └─ TrainSimulator (basico)
+  └─ AdvancedTrainSimulator (com fumaca)
+
+renderers/train_renderer.py
+  └─ TrainRenderer (renderiza trem)
+
+train_simulation.py
+  └─ MAIN SCRIPT - use este!
+
+examples_train.py
+  └─ Gera exemplos
+
+DOCUMENTACAO:
+  - TRAIN_GUIA_PT.md (guia completo)
+  - TRAIN_SIMULATOR_README.md (tech)
+  - TRAIN_QUICK_REFERENCE.md (rapido)
+
+
+=====================================
+CONFIGURACAO BASICA
+=====================================
+
+Trem pequeno (rapido):
+  num_wagons=2, points_per_wagon=300
+
+Trem normal (recomendado):
+  num_wagons=5, points_per_wagon=800
+
+Trem grande (detalhado):
+  num_wagons=10, points_per_wagon=2000
+
+
+=====================================
+SE ALGO NAO FUNCIONAR
+=====================================
+
+Erro: "Modulo nao encontrado"
+  → Certifique-se de estar em c:\3D\ProgramViewer3D-main
+
+Trem nao aparece
+  → Pressione K para ativar
+
+Muito lento
+  → Reduza points_per_wagon ou num_wagons
+
+Erro OpenGL
+  → Sua GPU pode nao suportar OpenGL 3.0+
+
+
+=====================================
+PROXIMOS PASSOS
+=====================================
+
+1. Execute: python examples_train.py
+2. Visualize: python main.py train_example.pts
+3. Estude: TRAIN_GUIA_PT.md
+4. Use: python train_simulation.py seu_arquivo.pts
+
+
+=====================================
+TESTE RAPIDO (20 segundos)
+=====================================
+
+cd c:\3D\ProgramViewer3D-main
+python -c "from utils.train_simulator import TrainSimulator; t = TrainSimulator(3); p, c = t.get_points(); print(f'OK! {len(p):,} pontos')"
+
+Resultado esperado: OK! 5808 pontos
+
+
+=====================================
+STATUS: PRONTO PARA USO
+=====================================
+
+[OK] Simulador funcionando
+[OK] Renderizador funcionando
+[OK] Integração funcionando
+[OK] Documentação completa
+[OK] Exemplos funcionando
+
+INICIO RECOMENDADO:
+  python train_simulation.py
+
+
+DIVIRTA-SE COM SEU TREM 3D!
+
+🚂

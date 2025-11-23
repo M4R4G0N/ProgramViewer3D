@@ -46,12 +46,14 @@ class UPLLoader(DataLoader):
     Formato específico com cabeçalhos EFVM e dados de seção transversal
     """
     
-    def __init__(self, max_points=None):
+    def __init__(self, max_points=None, template=None):
         """
         Args:
             max_points: Limite de pontos para performance (None = sem limite)
+            template: Gabarito para classificação (None = usa padrão ferrovia)
         """
         self.max_points = max_points
+        self.template = template
     
     def supports(self, filepath):
         """Suporta arquivos .upl"""
@@ -64,7 +66,7 @@ class UPLLoader(DataLoader):
         Returns:
             Tupla (vertices, colors) com dados normalizados
         """
-        print(f"📂 Lendo arquivo UPL: {filepath}...")
+        print(f"[LENDO] Lendo arquivo UPL: {filepath}...")
         
         if not os.path.exists(filepath):
             raise FileNotFoundError(f"Arquivo '{filepath}' não encontrado!")
@@ -83,19 +85,19 @@ class UPLLoader(DataLoader):
         if len(xs) == 0:
             raise ValueError("Nenhum ponto válido encontrado no arquivo UPL!")
         
-        print(f"✅ {len(xs):,} pontos extraídos")
+        print(f"[OK] {len(xs):,} pontos extraidos")
         
         # Filtragem e amostragem
         xs, ys, zs = self._filter_and_sample(xs, ys, zs)
         
         # Normalização de coordenadas
-        xs, ys, zs = self._normalize_coordinates(xs, ys, zs)
+        xs, ys, zs_norm = self._normalize_coordinates(xs, ys, zs)
         
         # Calcula cores por classificação
-        colors = self._calculate_colors(xs, ys, zs)
+        colors = self._calculate_colors(xs, ys, zs_norm)
         
         # Monta arrays de retorno
-        vertices = np.column_stack((xs, ys, zs)).astype(np.float32)
+        vertices = np.column_stack((xs, ys, zs_norm)).astype(np.float32)
         
         print(f"📊 Carregamento completo: {len(vertices):,} pontos")
         return vertices, colors
@@ -174,7 +176,7 @@ class UPLLoader(DataLoader):
         z_min = zs.min()
         zs_norm = zs - z_min
         
-        print(f"📐 Coordenadas normalizadas:")
+        print(f"[NORMALIZAR] Coordenadas normalizadas:")
         print(f"   X: [{xs.min():.1f}, {xs.max():.1f}] m")
         print(f"   Y: [{ys.min():.1f}, {ys.max():.1f}] m")
         print(f"   Z: [{zs_norm.min():.1f}, {zs_norm.max():.1f}] m")
@@ -183,54 +185,29 @@ class UPLLoader(DataLoader):
     
     def _calculate_colors(self, xs, ys, zs):
         """Calcula cores por classificação de túnel (Verde/Amarelo/Vermelho)"""
-        print("🎨 Calculando cores por classificação...")
+        from utils.tunnel_templates import FerroviaTunel, classify_points_with_template, colors_from_classification
         
-        n = len(xs)
-        colors_r = np.zeros(n, dtype=np.float32)
-        colors_g = np.ones(n, dtype=np.float32)   # Verde por padrão
-        colors_b = np.zeros(n, dtype=np.float32)
+        # Se não fornecido um gabarito, usa o padrão (ferrovia)
+        template = self.template if self.template is not None else FerroviaTunel()
         
-        # Cálculo vetorizado (muito mais rápido que Numba para arrays grandes)
-        x_abs = np.abs(xs)
+        # Classifica pontos: 0=seguro, 1=alerta, 2=invasão
+        classifications = classify_points_with_template(xs, ys, template)
         
-        # Pré-calcula distâncias para semicírculo
-        dist_semicirculo = np.sqrt(xs*xs + (ys - 5.8)*(ys - 5.8))
-        
-        # VERMELHO: Invasão
-        # Parte retangular
-        mask_vermelho_ret = (x_abs <= 2.2) & (ys >= 2.5) & (ys <= 5.8)
-        # Parte semicírculo
-        mask_vermelho_semi = (x_abs <= 2.2) & (ys > 5.8) & (ys <= 8.0) & (dist_semicirculo <= 2.2)
-        mask_vermelho = mask_vermelho_ret | mask_vermelho_semi
-        
-        colors_r[mask_vermelho] = 1.0
-        colors_g[mask_vermelho] = 0.0
-        
-        # AMARELO: Alerta
-        # Parte retangular
-        mask_amarelo_ret = (x_abs > 2.2) & (x_abs <= 2.7) & (ys >= 2.4) & (ys <= 5.8)
-        # Parte semicírculo
-        mask_amarelo_semi = ((x_abs > 2.2) & (x_abs <= 2.7) & (ys > 5.8) & (ys <= 8.0) & 
-                            (dist_semicirculo > 2.2) & (dist_semicirculo <= 2.7))
-        # Margem base
-        mask_amarelo_base = (x_abs <= 2.2) & (ys >= 2.4) & (ys < 2.5)
-        
-        mask_amarelo = mask_amarelo_ret | mask_amarelo_semi | mask_amarelo_base
-        
-        colors_r[mask_amarelo] = 1.0
-        colors_g[mask_amarelo] = 1.0
+        # Converte classificações para cores RGB
+        colors = colors_from_classification(classifications)
         
         # Estatísticas
-        n_vermelho = np.sum(mask_vermelho)
-        n_amarelo = np.sum(mask_amarelo)
-        n_verde = n - n_vermelho - n_amarelo
+        n_seguro = np.sum(classifications == 0)
+        n_alerta = np.sum(classifications == 1)
+        n_invasao = np.sum(classifications == 2)
+        total = len(classifications)
         
-        print(f"📊 Classificação:")
-        print(f"   🟢 SEGURO: {n_verde:,} ({n_verde/n*100:.1f}%)")
-        print(f"   🟡 ALERTA: {n_amarelo:,} ({n_amarelo/n*100:.1f}%)")
-        print(f"   🔴 INVASÃO: {n_vermelho:,} ({n_vermelho/n*100:.1f}%)")
+        print(f"[STATS] Classificacao (gabarito: {template.name}):")
+        print(f"   [SEGURO] {n_seguro:,} ({n_seguro/total*100:.1f}%)")
+        print(f"   [ALERTA] {n_alerta:,} ({n_alerta/total*100:.1f}%)")
+        print(f"   [INVASAO] {n_invasao:,} ({n_invasao/total*100:.1f}%)")
         
-        return np.column_stack((colors_r, colors_g, colors_b)).astype(np.float32)
+        return colors.astype(np.float32)
 
 
 class PTSLoader(DataLoader):

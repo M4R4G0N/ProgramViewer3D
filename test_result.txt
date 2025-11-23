@@ -1,0 +1,75 @@
+﻿python : Traceback (most recent call last):
+No linha:1 caractere:32
++ cd c:\3D\ProgramViewer3D-main; python test_gabarits.py 2>&1 | Out-Fil ...
++                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Traceback (most recent call last)::String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  File "C:\3D\ProgramViewer3D-main\test_gabarits.py", line 101, in test_data_loader
+    vertices, colors = loader.load(arquivo)
+                       ~~~~~~~~~~~^^^^^^^^^
+  File "C:\3D\ProgramViewer3D-main\loaders\data_loader.py", line 102, in load
+    print(f"\U0001f4ca Carregamento completo: {len(vertices):,} pontos")
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Marco Antonio\AppData\Local\Programs\Python\Python313\Lib\encodings\cp1252.py", line 19, 
+in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\U0001f4ca' in position 0: character maps to 
+<undefined>
+======================================================================
+TESTE RAPIDO: Sistema de Gabaritos de Tunel v2.0
+======================================================================
+
+[1/5] Testando imports...
+    [OK] Todos os imports OK
+
+[2/5] Testando gabaritos...
+    Gabaritos disponÝveis: 3
+      - ferrovia: T·nel Ferrovia
+      - rodovia: Rodovia Dupla (4 faixas)
+      - aqueduto: T·nel Aq³eduto
+      - ferrovia @ (0.0, 3.0): INVASAO
+      - rodovia @ (0.0, 3.0): SEGURO
+      - aqueduto @ (0.0, 3.0): INVASAO
+    [OK] Gabaritos OK
+
+[3/5] Testando classificaþÒo de pontos...
+    Pontos: 4
+    Classificacoes: [2 2 1 0]
+    Cores: shape=(4, 3), dtype=float32
+    [OK] Classificacao OK
+
+[4/5] Testando carregador UPL...
+    Arquivo encontrado: RLT_NE__20250227_00 1.upl
+[LENDO] Lendo arquivo UPL: RLT_NE__20250227_00 1.upl...
+[OK] 2,513,525 pontos extraidos
+[NORMALIZAR] Coordenadas normalizadas:
+   X: [-10.0, 10.0] m
+   Y: [0.2, 10.0] m
+   Z: [0.0, 886.2] m
+[STATS] Classificacao (gabarito: T·nel Ferrovia):
+   [SEGURO] 1,923,237 (88.8%)
+   [ALERTA] 231,573 (10.7%)
+   [INVASAO] 10,634 (0.5%)
+    [ERRO] 'charmap' codec can't encode character '\U0001f4ca' in position 0: character maps to <undefined>
+
+[5/5] Testando registro de gabarito customizado...
+    Gabarito registrado: Teste
+    Classificacao de (0, 1): INVASAO
+    [OK] Registro OK
+
+======================================================================
+RESULTADO DOS TESTES
+======================================================================
+Imports              [PASSOU]
+Gabaritos            [PASSOU]
+Classificacao        [PASSOU]
+Data Loader          [FALHOU]
+Registry             [PASSOU]
+======================================================================
+Total: 4/5 testes passaram
+======================================================================
+
+[AVISO] 1 teste(s) falharam.
+
