@@ -41,7 +41,10 @@ class Configuration:
             {"name": "Cinza Médio", "color": [0.3, 0.3, 0.3, 1.0]},
             {"name": "Branco", "color": [1.0, 1.0, 1.0, 1.0]},
             {"name": "Azul Escuro", "color": [0.0, 0.0, 0.2, 1.0]}
-        ]
+        ],
+        
+        # Arquivos recentes
+        "recent_files": []
     }
     
     def __init__(self, config_file="config.json"):
@@ -171,6 +174,37 @@ class Configuration:
     def get_background_presets(self):
         """Retorna lista de presets de cor de fundo"""
         return self.get("background_presets", self.DEFAULT_CONFIG["background_presets"])
+    
+    def get_recent_files(self):
+        """Retorna lista de arquivos recentes"""
+        return self.get("recent_files", [])
+    
+    def add_recent_file(self, filepath):
+        """
+        Adiciona arquivo ao histórico de recentes
+        Mantém no máximo 5 arquivos, com o mais recente no topo
+        
+        Args:
+            filepath: Caminho do arquivo a adicionar
+        """
+        recent = self.get("recent_files", [])
+        
+        # Remove o arquivo se já existir (para evitar duplicatas)
+        if filepath in recent:
+            recent.remove(filepath)
+        
+        # Adiciona no início da lista
+        recent.insert(0, filepath)
+        
+        # Mantém apenas os 5 mais recentes
+        recent = recent[:5]
+        
+        # Salva
+        self.set("recent_files", recent)
+    
+    def clear_recent_files(self):
+        """Limpa histórico de arquivos recentes"""
+        self.set("recent_files", [])
     
     def __getitem__(self, key):
         """Permite acesso via config[key]"""

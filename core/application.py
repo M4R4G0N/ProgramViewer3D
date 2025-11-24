@@ -16,6 +16,8 @@ from ui.vector_font import VectorFont
 from ui.components import Panel, ColorButton, ToggleButton, Slider, Button
 from ui.font_editor import FontEditor
 from ui.menu_bar import MenuBar
+from ui.train_control_panel import TrainControlPanel
+from ui.train_selector_menu import TrainSelectorMenu
 
 
 class Viewer3DApplication:
@@ -80,6 +82,28 @@ class Viewer3DApplication:
         
         # Menu Bar
         self.menu_bar = MenuBar(self.width, self.height)
+        
+        # Inicializa lista de arquivos recentes no menu
+        self.menu_bar.update_recent_files(self.config.get_recent_files())
+        
+        # Train Control Panel
+        self.control_panel = TrainControlPanel(self.width, self.height, self.font)
+        self.control_panel.visible = False  # Inicialmente oculto
+        
+        # Callbacks do painel de controle
+        self.control_panel.on_menu = lambda: self.train_selector.open()
+        self.control_panel.on_toggle_train = lambda: print("🚂 Toggle Trem")
+        self.control_panel.on_toggle_cloud = lambda: print("☁️  Toggle Nuvem")
+        self.control_panel.on_pause = lambda: print("⏸️  Pause")
+        self.control_panel.on_reset = lambda: print("🔄 Reset")
+        self.control_panel.on_velocity_change = lambda v, is_absolute=False: print(f"⚡ Velocidade: {v}")
+        self.control_panel.on_y_position_change = lambda y: print(f"↕️  Posição Y: {y}")
+        
+        # Train Selector Menu
+        self.train_selector = TrainSelectorMenu(self.width, self.height, self.font)
+        self.train_selector.on_confirm_callback = self._on_train_selected
+        self.train_selector.on_cancel_callback = self._on_train_selector_cancel
+        
         # Auto-rotation (runtime only, not salvo)
         self.auto_rotate_x = False
         self._auto_rotate_angle_x = 0.0  # graus
@@ -248,6 +272,10 @@ class Viewer3DApplication:
     
     def _key_callback(self, window, key, scancode, action, mods):
         """Callback de teclado"""
+        # Train Selector Menu tem prioridade máxima
+        if self.train_selector.handle_key(key, action):
+            return
+        
         # Detecta Ctrl
         if key in [glfw.KEY_LEFT_CONTROL, glfw.KEY_RIGHT_CONTROL]:
             self.ctrl_pressed = (action == glfw.PRESS)
@@ -328,6 +356,10 @@ class Viewer3DApplication:
                 self.font_editor.activate()
                 return
             
+            # P: Toggle Painel de Controle
+            elif key == glfw.KEY_P:
+                self._process_menu_action('toggle_control_panel')
+            
             # C: Menu de configuração
             elif key == glfw.KEY_C:
                 self._process_menu_action('show_config')
@@ -345,9 +377,12 @@ class Viewer3DApplication:
             elif key == glfw.KEY_O:
                 self._open_file_dialog()
             
-            # T: Tabela de pontos
+            # T: Tabela de pontos / Shift+T: Seletor de Trem
             elif key == glfw.KEY_T:
-                self._open_points_table()
+                if mods & glfw.MOD_SHIFT:
+                    self._process_menu_action('open_train_selector')
+                else:
+                    self._open_points_table()
             
             # V: Toggle auto-rotação X
             elif key == glfw.KEY_V:
@@ -450,11 +485,15 @@ class Viewer3DApplication:
                 mx, my = glfw.get_cursor_pos(window)
                 my_inverted = self.height - my  # Inverte Y para sistema OpenGL
                 
+                # Train Selector Menu tem prioridade máxima
+                if self.train_selector.handle_click(mx, my_inverted):
+                    return
+                
                 # Verifica clique na barra de menu ou dropdown (usa coordenadas OpenGL - Y crescendo para cima)
                 # Sempre processa clique se menu está ativo (dropdown aberto) OU se está sobre a barra
                 if self.menu_bar.active_menu is not None or self.menu_bar.is_over_menu(mx, my_inverted):
                     menu_action = self.menu_bar.handle_click(mx, my_inverted)
-                    if menu_action:
+                    if menu_action and menu_action != 'none':
                         self._process_menu_action(menu_action)
                     return
                 
@@ -465,6 +504,11 @@ class Viewer3DApplication:
                         # Mas ainda precisamos setar left_drag para o drag funcionar
                         self.left_drag = True
                         self.last_mouse_x, self.last_mouse_y = glfw.get_cursor_pos(window)
+                        return
+                
+                # Verifica clique no Control Panel
+                if self.control_panel.visible:
+                    if self.control_panel.handle_click(mx, my_inverted):
                         return
                 
                 # Verifica clique na UI
@@ -519,6 +563,13 @@ class Viewer3DApplication:
                 self.menu_bar.handle_hover(xpos, self.height - ypos)
             except Exception:
                 pass
+            
+            # Atualiza hover do control panel
+            if self.control_panel.visible:
+                try:
+                    self.control_panel.update_hover(xpos, self.height - ypos)
+                except Exception:
+                    pass
         
         # Processa drag da câmera
         if self.left_drag:
@@ -552,6 +603,11 @@ class Viewer3DApplication:
             self.menu_bar.update_size(width, height)
         except Exception:
             pass
+        # Atualiza tamanho do control panel
+        try:
+            self.control_panel.update_size(width, height)
+        except Exception:
+            pass
     
     def load_file(self, filepath):
         """
@@ -565,6 +621,13 @@ class Viewer3DApplication:
             vertices, colors = self.data_loader.load(filepath)
             self.point_renderer.set_data(vertices, colors)
             self.current_file = filepath
+            
+            # Adiciona ao histórico de arquivos recentes
+            self.config.add_recent_file(filepath)
+            self.config.save()
+            
+            # Atualiza menu com arquivos recentes
+            self.menu_bar.update_recent_files(self.config.get_recent_files())
             
             # Ajusta câmera para centralizar e cacheia centro para auto-rotação
             center = self.point_renderer.get_center()
@@ -623,6 +686,19 @@ class Viewer3DApplication:
         
         table_window = PointsTableWindow(vertices, colors, self.current_file, app=self)
         table_window.run()
+    
+    def _on_train_selected(self, model, vagons, y_offset):
+        """Callback quando trem é selecionado"""
+        print(f"🚂 Trem selecionado:")
+        print(f"   Modelo: {model}")
+        print(f"   Vagões: {vagons}")
+        print(f"   Posição Y: {y_offset}")
+        # Aqui você pode adicionar lógica para carregar o arquivo do trem
+        # Por exemplo: self.load_file(f"trains/{model}.upl")
+    
+    def _on_train_selector_cancel(self):
+        """Callback quando seletor de trem é cancelado"""
+        print("❌ Seleção de trem cancelada")
 
     def _process_menu_action(self, action):
         """Processa ações vindas da MenuBar"""
@@ -631,6 +707,23 @@ class Viewer3DApplication:
         elif action == 'reload_file':
             if self.current_file:
                 self.load_file(self.current_file)
+        elif action.startswith('open_recent_'):
+            # Abre arquivo recente pelo índice
+            idx = int(action.split('_')[-1])
+            recent_files = self.config.get_recent_files()
+            if 0 <= idx < len(recent_files):
+                filepath = recent_files[idx]
+                import os
+                if os.path.exists(filepath):
+                    self.load_file(filepath)
+                else:
+                    print(f"⚠️  Arquivo não encontrado: {filepath}")
+        elif action == 'cache_stats':
+            self.data_loader.print_cache_stats()
+        elif action == 'clear_cache':
+            print("🗑️  Limpando cache...")
+            self.data_loader.clear_cache()
+            print("✅ Cache limpo com sucesso!")
         elif action == 'exit':
             glfw.set_window_should_close(self.window, True)
         elif action == 'show_table':
@@ -649,6 +742,16 @@ class Viewer3DApplication:
             self.camera.reset()
         elif action == 'font_editor':
             self.font_editor.activate()
+        elif action == 'toggle_control_panel':
+            self.control_panel.visible = not self.control_panel.visible
+            # Atualiza checkbox no menu
+            for item in self.menu_bar.menus[2]['items']:  # Menu Ferramentas
+                if item.get('action') == 'toggle_control_panel':
+                    item['checked'] = self.control_panel.visible
+            print(f"🎛️  Painel de Controle: {'Ativado' if self.control_panel.visible else 'Desativado'}")
+        elif action == 'open_train_selector':
+            self.train_selector.open()
+            print("🚂 Abrindo seletor de trem...")
         elif action == 'toggle_auto_rotate_x':
             self.auto_rotate_x = not self.auto_rotate_x
             print(f"🔁 Auto-rotacionar X: {'Ativado' if self.auto_rotate_x else 'Desativado'}")
@@ -709,23 +812,7 @@ class Viewer3DApplication:
         pitch, yaw = self.camera.get_rotation_matrix()
         self.axis_indicator.render(pitch, yaw)
         
-        # Renderiza UI (se menu aberto)
-        if self.show_config_menu:
-            self._render_config_menu()
-        
-        # Renderiza Font Editor (tem prioridade)
-        if self.font_editor.active:
-            self.font_editor.render()
-
-        # Renderiza barra de menu sempre por cima
-        try:
-            self.menu_bar.render()
-        except Exception:
-            pass
-    
-    def _render_config_menu(self):
-        """Renderiza menu de configuração"""
-        # Modo 2D
+        # Modo 2D para UI
         glMatrixMode(GL_PROJECTION)
         glPushMatrix()
         glLoadIdentity()
@@ -736,6 +823,37 @@ class Viewer3DApplication:
         glLoadIdentity()
         
         glDisable(GL_DEPTH_TEST)
+        
+        # Renderiza UI (se menu aberto)
+        if self.show_config_menu:
+            self._render_config_menu_content()
+        
+        # Renderiza Control Panel (se visível)
+        if self.control_panel.visible:
+            self.control_panel.render()
+        
+        # Renderiza Train Selector Menu (se ativo)
+        self.train_selector.render()
+        
+        # Renderiza Font Editor (tem prioridade)
+        if self.font_editor.active:
+            self.font_editor.render()
+
+        # Renderiza barra de menu sempre por cima
+        try:
+            self.menu_bar.render()
+        except Exception:
+            pass
+        
+        # Restaura modo 3D
+        glEnable(GL_DEPTH_TEST)
+        glMatrixMode(GL_PROJECTION)
+        glPopMatrix()
+        glMatrixMode(GL_MODELVIEW)
+        glPopMatrix()
+    
+    def _render_config_menu_content(self):
+        """Renderiza conteúdo do menu de configuração"""
         glEnable(GL_BLEND)
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
         
@@ -772,12 +890,6 @@ class Viewer3DApplication:
                            color=(0.7, 0.7, 0.7), font_size=0.7)
         
         glDisable(GL_BLEND)
-        glEnable(GL_DEPTH_TEST)
-        
-        glPopMatrix()
-        glMatrixMode(GL_PROJECTION)
-        glPopMatrix()
-        glMatrixMode(GL_MODELVIEW)
     
     def run(self):
         """Loop principal da aplicação"""
@@ -859,6 +971,7 @@ class Viewer3DApplication:
         print("  R:                    Reset câmera")
         print("  C:                    Menu configuração")
         print("  F:                    ✏️  Editor de Fontes")
+        print("  P:                    🎛️  Painel de Controle")
         if self.current_file:
             print("  U:                    Recarregar arquivo")
         print("  ESC:                  Sair")

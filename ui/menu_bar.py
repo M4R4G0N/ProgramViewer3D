@@ -31,6 +31,11 @@ class MenuBar:
                     {'label': 'Abrir (O)', 'action': 'open_file'},
                     {'label': 'Recarregar (U)', 'action': 'reload_file'},
                     {'separator': True},
+                    {'label': 'Recentes', 'action': 'recent_files_submenu', 'is_submenu': True},
+                    {'separator': True},
+                    {'label': 'Estatísticas do Cache', 'action': 'cache_stats'},
+                    {'label': 'Limpar Cache', 'action': 'clear_cache'},
+                    {'separator': True},
                     {'label': 'Sair (ESC)', 'action': 'exit'}
                 ]
             },
@@ -53,7 +58,10 @@ class MenuBar:
             {
                 'label': 'Ferramentas',
                 'items': [
-                    {'label': 'Editor de Fontes (F)', 'action': 'font_editor'}
+                    {'label': 'Editor de Fontes (F)', 'action': 'font_editor'},
+                    {'separator': True},
+                    {'label': 'Seletor de Trem (Shift+T)', 'action': 'open_train_selector'},
+                    {'label': 'Painel de Controle (P)', 'action': 'toggle_control_panel', 'checked': False}
                 ]
             }
         ]
@@ -79,6 +87,53 @@ class MenuBar:
         """Atualiza tamanho da janela"""
         self.width = width
         self.height = height
+    
+    def update_recent_files(self, recent_files):
+        """
+        Atualiza lista de arquivos recentes no menu
+        
+        Args:
+            recent_files: Lista de caminhos de arquivos recentes
+        """
+        # Encontra o menu Arquivo
+        for menu in self.menus:
+            if menu['label'] == 'Arquivo':
+                # Encontra o item "Recentes"
+                for i, item in enumerate(menu['items']):
+                    if item.get('action') == 'recent_files_submenu':
+                        # Remove itens antigos de arquivos recentes (se existirem)
+                        # Remove todos os itens após "Recentes" até o próximo separador
+                        items_to_remove = []
+                        for j in range(i + 1, len(menu['items'])):
+                            if menu['items'][j].get('separator'):
+                                break
+                            if menu['items'][j].get('action', '').startswith('open_recent_'):
+                                items_to_remove.append(j)
+                        
+                        # Remove de trás para frente para não bagunçar os índices
+                        for j in reversed(items_to_remove):
+                            menu['items'].pop(j)
+                        
+                        # Adiciona novos arquivos recentes
+                        if recent_files:
+                            insert_pos = i + 1
+                            for idx, filepath in enumerate(recent_files):
+                                import os
+                                filename = os.path.basename(filepath)
+                                menu['items'].insert(insert_pos + idx, {
+                                    'label': f'  {idx + 1}. {filename}',
+                                    'action': f'open_recent_{idx}',
+                                    'filepath': filepath
+                                })
+                        else:
+                            # Nenhum arquivo recente
+                            menu['items'].insert(i + 1, {
+                                'label': '  (vazio)',
+                                'action': 'none',
+                                'disabled': True
+                            })
+                        break
+                break
     
     def is_over_menu(self, x, y):
         """
@@ -136,15 +191,22 @@ class MenuBar:
 
                 if (dropdown_x <= x < dropdown_x + dropdown_width and
                     item_y_bottom <= y < item_y_top):
+                    
+                    # Ignora items desabilitados ou submenus sem ação
+                    if item.get('disabled') or item.get('is_submenu'):
+                        return None
+                    
+                    # Pega a ação
+                    action = item.get('action')
+                    
                     # Se item for do tipo checkbox, toggla seu estado
                     if 'checked' in item:
                         item['checked'] = not item.get('checked', False)
-                        action = item.get('action')
-                        self.active_menu = None
-                        return action
-
-                    action = item.get('action')
+                    
+                    # Fecha o menu
                     self.active_menu = None
+                    
+                    # Retorna ação (pode ser None)
                     return action
 
                 y_offset += item_height

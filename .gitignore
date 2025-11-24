@@ -70,6 +70,9 @@ coverage.xml
 *.tmp
 *.bak
 
+# Cache de nuvens de pontos
+.cache/
+
 # Arquivos grandes de dados (>100MB)
 *.pts
 *.upl
@@ -79,7 +82,7 @@ coverage.xml
 *.laz
 *.e57
 *.xyz
-
+*.kml
 # Configurações específicas do usuário (opcional)
 # config.json
 config.json

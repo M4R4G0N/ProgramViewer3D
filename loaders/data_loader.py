@@ -71,6 +71,19 @@ class UPLLoader(DataLoader):
         if not os.path.exists(filepath):
             raise FileNotFoundError(f"Arquivo '{filepath}' não encontrado!")
         
+        # Verifica se existe cache
+        cache_path = self._get_cache_path(filepath)
+        if os.path.exists(cache_path):
+            try:
+                print(f"[CACHE] Carregando do cache: {cache_path}")
+                cached = np.load(cache_path)
+                vertices = cached['vertices']
+                colors = cached['colors']
+                print(f"📊 Carregamento completo (cache): {len(vertices):,} pontos")
+                return vertices, colors
+            except Exception as e:
+                print(f"⚠️  Erro ao carregar cache, reprocessando: {e}")
+        
         # Lê arquivo com encoding apropriado
         try:
             with open(filepath, 'r', encoding='utf-8') as f:
@@ -80,7 +93,7 @@ class UPLLoader(DataLoader):
                 linhas = [linha.strip() for linha in f if linha.strip()]
         
         # Extrai coordenadas
-        xs, ys, zs = self._parse_upl_lines(linhas)
+        xs, ys, zs, desvios_laterais = self._parse_upl_lines(linhas)
         
         if len(xs) == 0:
             raise ValueError("Nenhum ponto válido encontrado no arquivo UPL!")
@@ -88,25 +101,47 @@ class UPLLoader(DataLoader):
         print(f"[OK] {len(xs):,} pontos extraidos")
         
         # Filtragem e amostragem
-        xs, ys, zs = self._filter_and_sample(xs, ys, zs)
+        xs, ys, zs, desvios_laterais = self._filter_and_sample(xs, ys, zs, desvios_laterais)
         
         # Normalização de coordenadas
         xs, ys, zs_norm = self._normalize_coordinates(xs, ys, zs)
         
-        # Calcula cores por classificação
-        colors = self._calculate_colors(xs, ys, zs_norm)
+        # Calcula cores por classificação (usando X relativo - sem desvio lateral)
+        colors = self._calculate_colors(xs, ys, zs_norm, desvios_laterais)
         
         # Monta arrays de retorno
         vertices = np.column_stack((xs, ys, zs_norm)).astype(np.float32)
         
+        # Salva cache
+        self._save_cache(cache_path, vertices, colors)
+        
         print(f"📊 Carregamento completo: {len(vertices):,} pontos")
         return vertices, colors
     
+    def _get_cache_path(self, filepath):
+        """Gera caminho para arquivo de cache"""
+        cache_dir = ".cache"
+        os.makedirs(cache_dir, exist_ok=True)
+        
+        base_name = os.path.basename(filepath)
+        cache_name = os.path.splitext(base_name)[0] + ".npz"
+        return os.path.join(cache_dir, cache_name)
+    
+    def _save_cache(self, cache_path, vertices, colors):
+        """Salva dados processados em cache"""
+        try:
+            np.savez_compressed(cache_path, vertices=vertices, colors=colors)
+            print(f"[CACHE] Dados salvos em: {cache_path}")
+        except Exception as e:
+            print(f"⚠️  Não foi possível salvar cache: {e}")
+    
     def _parse_upl_lines(self, linhas):
-        """Extrai coordenadas X, Y, Z das linhas do arquivo"""
+        """Extrai coordenadas X, Y, Z e lat/lon das linhas do arquivo"""
         xs_global = []
         ys_global = []
         zs_global = []
+        lats = []  # Latitude de cada seção
+        lons = []  # Longitude de cada seção
         
         i = 0
         while i + 1 < len(linhas):
@@ -126,6 +161,15 @@ class UPLLoader(DataLoader):
                 else:
                     z_val = 0.0
                 
+                # Extrai latitude e longitude (campos 15 e 16 = índices 14 e 15)
+                lat, lon = 0.0, 0.0
+                try:
+                    if len(partes) >= 16:
+                        lat = float(partes[14].replace(',', '.'))
+                        lon = float(partes[15].replace(',', '.'))
+                except:
+                    pass
+                
                 # Lê linha de dados
                 linha_dados = linhas[i + 1]
                 dados_raw = [p.strip() for p in linha_dados.split(';') if p.strip() != '']
@@ -140,6 +184,8 @@ class UPLLoader(DataLoader):
                             xs_global.append(x / 1000.0)  # mm para metros
                             ys_global.append(y / 1000.0)
                             zs_global.append(z_val)
+                            lats.append(lat)
+                            lons.append(lon)
                     except ValueError:
                         continue
                 
@@ -148,15 +194,144 @@ class UPLLoader(DataLoader):
             
             i += 1
         
-        return np.array(xs_global), np.array(ys_global), np.array(zs_global)
+        xs = np.array(xs_global)
+        ys = np.array(ys_global)
+        zs = np.array(zs_global)
+        lats = np.array(lats)
+        lons = np.array(lons)
+        
+        # Aplica transformação lateral no eixo X baseado em lat/lon
+        # Retorna também os desvios aplicados
+        xs, desvios_laterais = self._apply_lateral_transform(xs, ys, zs, lats, lons)
+        
+        return xs, ys, zs, desvios_laterais
     
-    def _filter_and_sample(self, xs, ys, zs):
+    def _apply_lateral_transform(self, xs, ys, zs, lats, lons):
+        """
+        Aplica desvio lateral no eixo X baseado em latitude/longitude
+        
+        Lógica:
+        1. Lê todas as seções com lat/lon
+        2. Pega primeira e última seção
+        3. Cria linha reta imaginária (referência)
+        4. Para cada seção, calcula desvio perpendicular à linha reta
+        5. Adiciona esse desvio no eixo X de todos os pontos da seção
+        
+        Args:
+            xs, ys, zs: Coordenadas originais
+            lats, lons: Latitude e longitude de cada ponto
+            
+        Returns:
+            xs_new: Coordenadas X transformadas
+        """
+        # Fator de escala para desvio lateral (ajustável)
+        # Valores pequenos (0.001 - 0.1) para não distorcer muito
+        # 0.01 = 1% do desvio real
+        FATOR_ESCALA = 1
+        # Se não há lat/lon válido, retorna X original
+        if len(lats) == 0 or np.all(lats == 0) or np.all(lons == 0):
+            print("⚠️  Lat/Lon não disponível, mantendo coordenadas originais")
+            desvios = np.zeros_like(xs)
+            return xs, desvios
+        
+        # Agrupa por seção (Z único)
+        unique_z = np.unique(zs)
+        
+        if len(unique_z) < 2:
+            print("⚠️  Menos de 2 seções, mantendo coordenadas originais")
+            desvios = np.zeros_like(xs)
+            return xs, desvios
+        
+        # 1. Coleta lat/lon de cada seção
+        secoes = []
+        for z_val in unique_z:
+            mask = zs == z_val
+            lat_media = np.mean(lats[mask])
+            lon_media = np.mean(lons[mask])
+            secoes.append({
+                'z': z_val,
+                'lat': lat_media,
+                'lon': lon_media,
+                'mask': mask
+            })
+        
+        # 2. Primeira e última seção
+        primeira = secoes[0]
+        ultima = secoes[-1]
+        
+        lat_start = primeira['lat']
+        lon_start = primeira['lon']
+        lat_end = ultima['lat']
+        lon_end = ultima['lon']
+        
+        print(f"📍 Transformação lateral baseada em GPS:")
+        print(f"   Início: lat={lat_start:.6f}, lon={lon_start:.6f}")
+        print(f"   Fim: lat={lat_end:.6f}, lon={lon_end:.6f}")
+        
+        # 3. Converte lat/lon para metros (aproximação plana local)
+        # 1° lat ≈ 111 km
+        # 1° lon ≈ 111 km × cos(latitude)
+        lat_mid = (lat_start + lat_end) / 2
+        
+        # Vetor da linha reta imaginária (início → fim)
+        dx_reta = (lon_end - lon_start) * 111000 * np.cos(np.radians(lat_mid))
+        dy_reta = (lat_end - lat_start) * 111000
+        
+        dist_reta = np.sqrt(dx_reta**2 + dy_reta**2)
+        
+        if dist_reta < 0.001:  # Linha muito curta (< 1mm)
+            print("⚠️  Trajeto muito curto, mantendo coordenadas originais")
+            desvios = np.zeros_like(xs)
+            return xs, desvios
+        
+        # Normaliza vetor da linha reta
+        dx_reta_norm = dx_reta / dist_reta
+        dy_reta_norm = dy_reta / dist_reta
+        
+        # Vetor perpendicular à linha reta (rotação 90° anti-horário)
+        perp_x = -dy_reta_norm
+        perp_y = dx_reta_norm
+        
+        print(f"   Linha reta: ({dx_reta:.1f}m, {dy_reta:.1f}m) - {dist_reta:.1f}m")
+        print(f"   Vetor perpendicular: ({perp_x:.3f}, {perp_y:.3f})")
+        
+        # 4. Para cada seção, calcula desvio lateral
+        xs_new = xs.copy()
+        desvios = np.zeros_like(xs)  # Armazena desvio de cada ponto
+        
+        for secao in secoes:
+            lat_secao = secao['lat']
+            lon_secao = secao['lon']
+            mask = secao['mask']
+            
+            # Posição real da seção em relação ao início (metros)
+            dx_real = (lon_secao - lon_start) * 111000 * np.cos(np.radians(lat_mid))
+            dy_real = (lat_secao - lat_start) * 111000
+            
+            # Desvio perpendicular = produto escalar com vetor perpendicular
+            # Isso dá a distância lateral da seção em relação à linha reta
+            desvio_lateral = dx_real * perp_x + dy_real * perp_y
+            
+            # 5. Adiciona desvio lateral ao eixo X (com fator de escala)
+            xs_new[mask] += desvio_lateral * FATOR_ESCALA
+            desvios[mask] = desvio_lateral * FATOR_ESCALA
+        
+        print(f"   ✅ Desvio lateral aplicado (escala={FATOR_ESCALA})!")
+        print(f"   X original: [{xs.min():.1f}, {xs.max():.1f}] m")
+        print(f"   X com desvio: [{xs_new.min():.1f}, {xs_new.max():.1f}] m")
+        print(f"   Desvio aplicado: ±{abs(desvios).max():.2f} m")
+        
+        return xs_new, desvios
+    
+    def _filter_and_sample(self, xs, ys, zs, desvios_laterais):
         """Filtra outliers e reduz pontos se necessário"""
-        # Filtro: remove pontos muito distantes
-        mask = (np.abs(xs) <= 10.0) & (ys <= 10.0)
+        # Filtro: remove pontos muito distantes apenas no eixo Y
+        # X não tem limite (pode variar com desvio lateral GPS)
+        mask = (ys <= 10.0)
         xs = xs[mask]
         ys = ys[mask]
         zs = zs[mask]
+        desvios_laterais = desvios_laterais[mask]
         
         # Amostragem se muito grande (somente se max_points definido)
         if self.max_points is not None and len(xs) > self.max_points:
@@ -168,8 +343,9 @@ class UPLLoader(DataLoader):
             xs = xs[indices]
             ys = ys[indices]
             zs = zs[indices]
+            desvios_laterais = desvios_laterais[indices]
         
-        return xs, ys, zs
+        return xs, ys, zs, desvios_laterais
     
     def _normalize_coordinates(self, xs, ys, zs):
         """Normaliza coordenadas Z para visualização"""
@@ -183,15 +359,19 @@ class UPLLoader(DataLoader):
         
         return xs, ys, zs_norm
     
-    def _calculate_colors(self, xs, ys, zs):
+    def _calculate_colors(self, xs, ys, zs, desvios_laterais):
         """Calcula cores por classificação de túnel (Verde/Amarelo/Vermelho)"""
         from utils.tunnel_templates import FerroviaTunel, classify_points_with_template, colors_from_classification
         
         # Se não fornecido um gabarito, usa o padrão (ferrovia)
         template = self.template if self.template is not None else FerroviaTunel()
         
+        # Calcula X relativo (sem desvio lateral) para classificação correta
+        # O gabarito está sempre centrado em X=0
+        xs_relative = xs - desvios_laterais
+        
         # Classifica pontos: 0=seguro, 1=alerta, 2=invasão
-        classifications = classify_points_with_template(xs, ys, template)
+        classifications = classify_points_with_template(xs_relative, ys, template)
         
         # Converte classificações para cores RGB
         colors = colors_from_classification(classifications)
@@ -206,6 +386,7 @@ class UPLLoader(DataLoader):
         print(f"   [SEGURO] {n_seguro:,} ({n_seguro/total*100:.1f}%)")
         print(f"   [ALERTA] {n_alerta:,} ({n_alerta/total*100:.1f}%)")
         print(f"   [INVASAO] {n_invasao:,} ({n_invasao/total*100:.1f}%)")
+        print(f"   Classificação usa X relativo (descontando desvio lateral)")
         
         return colors.astype(np.float32)
 

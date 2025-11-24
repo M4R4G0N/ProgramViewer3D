@@ -5,15 +5,15 @@
         0.0,
         1.0
     ],
-    "point_size": 5.2075000000000005,
+    "point_size": 1.2025,
     "show_axes": false,
     "show_axis_indicator": true,
-    "camera_distance": 50.0,
-    "camera_pitch": 74.0,
-    "camera_yaw": 25.0,
+    "camera_distance": 30.0,
+    "camera_pitch": 86.5,
+    "camera_yaw": 153.5,
     "camera_move_speed": 5.0,
-    "window_width": 1440,
-    "window_height": 748,
+    "window_width": 1341,
+    "window_height": 1008,
     "window_title": "3D Point Cloud Viewer",
     "max_points": 500000,
     "enable_antialiasing": true,
@@ -63,5 +63,11 @@
                 1.0
             ]
         }
+    ],
+    "recent_files": [
+        "/home/maragon/Documentos/GitHub/ProgramViewer3D/test_data/test_mandelbrot.pts",
+        "/home/maragon/Documentos/GitHub/ProgramViewer3D/test_data/test_galaxy_10M.pts",
+        "/home/maragon/Documentos/RLT_NE__20250227_00 1.upl",
+        "/home/maragon/Documentos/GitHub/ProgramViewer3D/test_data/test_torus.pts"
     ]
 }

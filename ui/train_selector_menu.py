@@ -80,7 +80,12 @@ class TrainSelectorMenu:
             
             # ENTER: Confirmar
             elif key == glfw.KEY_ENTER:
-                if self.confirming_stage == 1:
+                if self.confirming_stage == 0:
+                    # Confirma modelo, vai para vagões
+                    self.confirming_stage = 1
+                    self.confirming = True
+                    return True
+                elif self.confirming_stage == 1:
                     # Confirma vagões, vai para offset Y
                     try:
                         vagons = int(self.vagons_input)
@@ -224,12 +229,18 @@ class TrainSelectorMenu:
         confirm_y = menu_y + 30
         if confirm_x <= x <= confirm_x + 150 and confirm_y <= y <= confirm_y + 40:
             try:
-                if self.confirming_stage == 1:
+                if self.confirming_stage == 0:
+                    # Confirma modelo, avança para vagões
+                    self.confirming_stage = 1
+                    self.confirming = True
+                elif self.confirming_stage == 1:
+                    # Confirma vagões, avança para offset Y
                     vagons = int(self.vagons_input)
                     if 1 <= vagons <= 100:
                         self.selected_vagons = vagons
                         self.confirming_stage = 2
                 elif self.confirming_stage == 2:
+                    # Confirma offset Y, finaliza
                     y_offset = float(self.y_offset_input)
                     if -50 <= y_offset <= 50:
                         self.selected_y_offset = y_offset
